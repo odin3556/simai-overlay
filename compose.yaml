@@ -1,0 +1,49 @@
+# PC に Node を入れずに、コンテナの中でテストや道具を動かす。
+services:
+  # テスト。実行: docker compose run --rm test
+  # 道具を動かすとき: docker compose run --rm test node tools/compare-draft.js .check/draft.simai test/fixtures/ov3rclock_14plus.simai
+  test:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - .:/app:ro
+    command: ["node", "--test", "test/*.test.js"]
+
+  # 譜面レーダー試作（tools/radar/index.html）を http://localhost:8787/ で出し、Majdata Net の譜面を中継する。
+  # 実行: docker compose up radar
+  radar:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./tools/radar/radar-server.js:/app/radar-server.js:ro
+      - ./tools/radar/index.html:/srv/index.html:ro
+    ports:
+      - "127.0.0.1:8787:8787"
+    command: ["node", "radar-server.js"]
+
+  # Docker の中の Chromium で、拡張機能（extension/）を YouTube 上で動かしてスクリーンショットを撮る。
+  # 実行: docker compose run --rm youtube-check
+  # 撮った画像や下書きは ./.check/ に出る（git には入れない）。
+  youtube-check:
+    image: mcr.microsoft.com/playwright:v1.49.1-noble
+    working_dir: /work
+    volumes:
+      - .:/repo:ro
+      - ./.check:/out
+    environment:
+      - CALIB
+      - SEEK
+      - FIRST
+      - SHOTS
+      - AUTO
+      - CHECK
+      - FIND
+      - DRAFT
+      - SONG
+      - DRAFT_RATE
+      - VIDEO
+      - SIMAI
+      - BPM
+      - DUMP
+      - DRAFT_FROM
+    entrypoint: ["sh", "-c", "cp /repo/tools/youtube-check.mjs . && npm init -y >/dev/null && npm i --silent playwright@1.49.1 && node youtube-check.mjs"]

@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "譜面重ね表示（simai overlay）",
+  "version": "0.2.0",
+  "description": "YouTube の譜面確認動画に simai のノーツを重ねて確かめ、動画から simai の下書きも作る。",
+  "permissions": ["storage"],
+  "host_permissions": ["https://otoge-db.net/*"],
+  "action": {
+    "default_title": "譜面重ね表示（オン / オフ）"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": [
+        "lib/simai/parse.js",
+        "lib/simai/timing.js",
+        "lib/geometry/geometry.js",
+        "lib/geometry/sensors.js",
+        "lib/detect/circle-detect.js",
+        "lib/geometry/flash.js",
+        "lib/detect/verify.js",
+        "lib/detect/first-detect.js",
+        "lib/geometry/slide-path.js",
+        "lib/detect/slide-detect.js",
+        "lib/detect/touch-detect.js",
+        "lib/detect/draft.js",
+        "lib/songdb.js",
+        "ui/sound.js",
+        "ui/youtube.js",
+        "ui/overlay.js",
+        "ui/calib.js",
+        "ui/panel.js",
+        "content.js"
+      ],
+      "css": ["ui/panel.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

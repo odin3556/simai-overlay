@@ -1,0 +1,12 @@
+# Docker の確認で出る画像・下書き（tools/youtube-check.mjs の出力）
+.check/
+
+node_modules/
+
+# Office の一時ファイル
+~$*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

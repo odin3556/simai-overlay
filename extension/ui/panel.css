@@ -1,0 +1,220 @@
+/* 透明な層。普段はクリックを通す */
+.simai-overlay-layer {
+  position: absolute;
+  pointer-events: none;
+  z-index: 30;
+}
+/* 位置合わせ中だけクリックを受ける */
+.simai-overlay-layer.simai-overlay-interactive {
+  pointer-events: auto;
+  cursor: crosshair;
+  z-index: 1000;
+}
+
+.simai-panel {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  width: 340px;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  z-index: 2147483000;
+  background: rgba(20, 20, 24, 0.94);
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 8px;
+  font: 12px/1.5 system-ui, "Yu Gothic UI", "Meiryo", sans-serif;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+.simai-p-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: #2a2a32;
+  border-radius: 8px 8px 0 0;
+  cursor: move;
+  font-weight: bold;
+  user-select: none;
+}
+.simai-p-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
+.simai-panel button {
+  background: #3a3a46;
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+.simai-panel button:hover {
+  background: #4a4a5a;
+}
+.simai-panel .simai-p-x {
+  background: none;
+  border: none;
+  font-size: 16px;
+  padding: 0 4px;
+}
+.simai-p-text {
+  height: 90px;
+  resize: vertical;
+  background: #111;
+  color: #ddd;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font: 11px/1.4 ui-monospace, Consolas, monospace;
+}
+.simai-p-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.simai-p-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.simai-p-num {
+  width: 52px;
+  background: #111;
+  color: #ddd;
+  border: 1px solid #444;
+  border-radius: 3px;
+}
+.simai-p-mono {
+  font-family: ui-monospace, Consolas, monospace;
+}
+.simai-p-counts {
+  color: #9fe0ff;
+}
+.simai-p-warn {
+  margin: 0;
+  padding-left: 16px;
+  color: #ffb36b;
+}
+.simai-p-warn:empty {
+  display: none;
+}
+.simai-p-hint {
+  color: #ff9ccc;
+}
+.simai-p-hint:empty {
+  display: none;
+}
+.simai-panel hr {
+  width: 100%;
+  border: none;
+  border-top: 1px solid #3a3a3a;
+  margin: 2px 0;
+}
+.simai-p-range {
+  width: 90px;
+}
+.simai-p-hint-static {
+  color: #999;
+  font-size: 11px;
+}
+.simai-p-step {
+  margin-top: 4px;
+  font-weight: bold;
+  color: #fff;
+  border-left: 3px solid #ff4fa3;
+  padding-left: 6px;
+}
+.simai-panel .simai-p-main {
+  background: #c2185b;
+  border-color: #e04a8a;
+  font-weight: bold;
+  padding: 6px 10px;
+}
+.simai-panel .simai-p-main:hover {
+  background: #d81b60;
+}
+.simai-p-score {
+  font-size: 14px;
+  font-weight: bold;
+  color: #bbb;
+}
+.simai-p-good { color: #6be38a; }
+.simai-p-soso { color: #ffd84a; }
+.simai-p-bad { color: #ff6b6b; }
+.simai-p-legend {
+  color: #aaa;
+  font-size: 11px;
+}
+.simai-p-more summary {
+  cursor: pointer;
+  color: #ccc;
+}
+.simai-p-more > div {
+  margin-top: 6px;
+}
+.simai-p-query {
+  flex: 1;
+  min-width: 120px;
+  background: #111;
+  color: #ddd;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.simai-p-select {
+  width: 100%;
+  background: #111;
+  color: #ddd;
+  border: 1px solid #444;
+  border-radius: 4px;
+}
+.simai-p-song-info {
+  white-space: pre-line;
+}
+.simai-p-links a {
+  color: #9fe0ff;
+}
+/* 上の見出しと「いまの場所」は、パネルを下へ動かしても見えるように固定 */
+.simai-p-top {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.simai-p-now {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  background: #1b2430;
+  border-bottom: 1px solid #444;
+}
+.simai-p-now[hidden] {
+  display: none;
+}
+.simai-p-now-time {
+  font: bold 13px/1.4 ui-monospace, Consolas, monospace;
+  color: #fff;
+}
+.simai-p-now-where {
+  color: #9fe0ff;
+}
+.simai-p-now-jump {
+  margin-left: auto;
+}
+.simai-p-now-line {
+  font: 12px/1.6 ui-monospace, Consolas, monospace;
+  white-space: pre;
+  overflow-x: auto;
+  color: #aaa;
+  scrollbar-width: thin;
+}
+.simai-p-now-cell {
+  background: #ffd84a;
+  color: #111;
+  border-radius: 3px;
+  padding: 0 1px;
+}

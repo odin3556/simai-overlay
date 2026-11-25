@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>パネルの見た目</title>
+<!-- 動画は使わない。パネルの「いま」の帯と、動画の左上の表示を、決まった値で並べて見るためのページ -->
+<link rel="stylesheet" href="../../extension/ui/panel.css">
+<style>
+  body { margin: 0; background: #0b0b0e; width: 1300px; height: 760px; font-family: system-ui; }
+  #player { position: absolute; left: 16px; top: 16px; width: 880px; height: 495px; background: #111; }
+  #player canvas { position: absolute; left: 0; top: 0; }
+</style>
+<div id="player"><canvas id="layer" width="880" height="495"></canvas></div>
+<script src="../../extension/lib/simai/parse.js"></script>
+<script src="../../extension/lib/simai/timing.js"></script>
+<script src="../../extension/lib/geometry/geometry.js"></script>
+<script src="../../extension/lib/geometry/flash.js"></script>
+<script src="../../extension/lib/geometry/slide-path.js"></script>
+<script src="../../extension/ui/overlay.js"></script>
+<script src="../../extension/ui/panel.js"></script>
+<script>
+  const text = require_text();
+  function require_text() {
+    return '(118){24}18,,,24,,24,,,6,57,,,1-5[8:1]/8-4[8:1],,2,7,,,{4}A1/A8/D1f,\n\n7hx[2:1],6,5h[2:1],4,3h[2:1],2,1h[4:1],8h[4:1],2h[2:1],3,4h[2:1],5,6h[2:1],7,8h[4:1],1,\n\nE';
+  }
+  const parsed = SimaiParse.parse(text);
+  const tl = SimaiTiming.buildTimeline(parsed);
+  const t = 2.6; // 譜面の時刻
+  const pos = SimaiTiming.positionAt(tl.tempoMap, t);
+  const loc = SimaiTiming.locate(text, parsed.cells, pos.beat);
+  const now = Object.assign({ video: 8.8 + t, chart: t, measure: pos.measure, beat: pos.beatInMeasure + 1 }, loc);
+  const noop = new Proxy({}, { get: () => () => {} });
+  const panel = new SimaiPanel.Panel(noop);
+  panel.mount();
+  panel.setText(text);
+  panel.setPlayback({ flow: true, speed: 6.5, touchSpeed: 6.5, sound: false, volume: 0.5, soundOffsetMs: 0, hud: true });
+  panel.setNow(now);
+  Object.assign(panel.root.style, { top: '16px', right: '16px' });
+  const ov = new SimaiOverlay.Overlay();
+  ov.canvas = document.getElementById('layer');
+  ov.ctx = ov.canvas.getContext('2d');
+  ov.w = 880; ov.h = 495;
+  ov.drawHud(now);
+  document.title = 'ok';
+</script>

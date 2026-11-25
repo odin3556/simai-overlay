@@ -1,0 +1,707 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>譜面レーダー試作</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* レイアウト：左にsimaiと数の照合、右にレーダー。下に1秒ごとの密度 */
+:root {
+  --bg: #f1f4f7; --surface: #ffffff; --fg: #15202b; --muted: #5a6677; --line: #d5dce5;
+  --accent: #0d7882; --accent-soft: rgba(13,120,130,.16); --hot: #c4650f; --ok: #2c7a39; --ng: #b3261e;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1319; --surface: #161f28; --fg: #e5eaf0; --muted: #98a4b3; --line: #2a3541;
+  --accent: #42c0c8; --accent-soft: rgba(66,192,200,.2); --hot: #f09d48; --ok: #6cc47a; --ng: #ff8a80; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1319; --surface: #161f28; --fg: #e5eaf0; --muted: #98a4b3; --line: #2a3541;
+  --accent: #42c0c8; --accent-soft: rgba(66,192,200,.2); --hot: #f09d48; --ok: #6cc47a; --ng: #ff8a80; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 48px; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: grid; gap: 6px; }
+.tag { justify-self: start; font-size: 12px; letter-spacing: .08em; color: var(--hot); border: 1px solid var(--hot); border-radius: 4px; padding: 1px 8px; }
+h1 { margin: 0; font-size: 26px; font-weight: 700; text-wrap: balance; }
+h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.lead { margin: 0; color: var(--muted); max-width: 68ch; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 20px; align-items: start; }
+@media (max-width: 880px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+input, textarea, select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#hits { width: 100%; box-sizing: border-box; }
+#hits option { padding: 2px 4px; }
+textarea { font-family: var(--font-data); font-size: 12.5px; line-height: 1.5; width: 100%; box-sizing: border-box; min-height: 220px; resize: vertical; }
+button { font: inherit; font-weight: 700; background: var(--accent); color: var(--surface); border: 0; border-radius: 6px; padding: 8px 18px; cursor: pointer; }
+button.sub { background: transparent; color: var(--accent); border: 1px solid var(--accent); font-weight: 500; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+.err { font-size: 13px; color: var(--ng); margin: 0; word-break: break-all; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+th { font-weight: 500; color: var(--muted); font-size: 12.5px; }
+td.num, th.num { text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+td input { width: 5.5em; text-align: right; font-family: var(--font-data); padding: 3px 6px; }
+.pill { display: inline-block; font-size: 12px; padding: 0 8px; border-radius: 99px; }
+.pill.ok { color: var(--ok); border: 1px solid var(--ok); }
+.pill.ng { color: var(--ng); border: 1px solid var(--ng); }
+.pill.na { color: var(--muted); border: 1px solid var(--line); }
+.radar-box { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: center; }
+@media (max-width: 560px) { .radar-box { grid-template-columns: minmax(0, 1fr); } }
+svg text { font-family: var(--font-body); fill: var(--fg); }
+.scores { display: grid; gap: 2px; }
+.score { display: grid; grid-template-columns: 5.2em 1fr 3em; gap: 8px; align-items: center; font-size: 13.5px; }
+.score .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.score .bar i { display: block; height: 100%; background: var(--accent); }
+.score b { font-family: var(--font-data); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.score small { grid-column: 2 / 4; color: var(--muted); font-size: 12px; margin-top: -2px; }
+.spots { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.spots li { display: grid; grid-template-columns: 7.5em 1fr; gap: 8px; }
+.spots span:first-child { color: var(--muted); }
+.chart-scroll { overflow-x: auto; }
+.chart-scroll svg { min-width: 620px; width: 100%; height: auto; display: block; }
+details { font-size: 14px; }
+details summary { cursor: pointer; font-weight: 700; }
+dl { display: grid; grid-template-columns: 6em minmax(0, 1fr); gap: 6px 14px; margin: 12px 0 0; }
+dt { font-weight: 700; } dd { margin: 0; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { #poly { transition: d .3s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="tag">試作・数え方は仮</span>
+    <h1>譜面レーダー試作</h1>
+    <p class="lead">simaiの文字を貼ると、ノーツ数を数えて公式の数と照らし合わせ、譜面レーダー（6つの軸と推定定数）を出します。見本としてOV3RCLOCK MASTER 14+ が入っています。</p>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="h-in">
+      <h2 id="h-site">0. サイトから読む</h2>
+      <div class="row">
+        <label style="flex:1 1 14em">サイト（または譜面ページのURL）<input id="site" value="https://majdata.net"></label>
+      </div>
+      <div class="row">
+        <label style="flex:1 1 10em">曲名で探す<input id="q" placeholder="空なら新しい順"></label>
+        <button id="find" type="button">探す</button>
+      </div>
+      <label>見つかった譜面<select id="hits" size="6"></select></label>
+      <div class="row">
+        <label>難易度<select id="lv" disabled></select></label>
+        <button id="load" type="button" disabled>simaiを入れる</button>
+        <button id="more" class="sub" type="button" hidden>もっと見る</button>
+      </div>
+      <p id="site-msg" class="note" aria-live="polite">いまは Majdata Net に対応しています。</p>
+      <label class="note" id="file-box" hidden>譜面が読めないときは、ダウンロードした maidata.txt をここで開く<input id="file" type="file" accept=".txt"></label>
+
+      <h2 id="h-in">1. simaiを貼る</h2>
+      <div class="row">
+        <label>曲名<input id="song" value="OV3RCLOCK" size="14"></label>
+        <label>難易度<input id="diff" value="MASTER 14+" size="10"></label>
+      </div>
+      <textarea id="src" spellcheck="false" aria-label="simaiの文字"></textarea>
+      <div class="row">
+        <button id="run" type="button">解析する</button>
+        <button id="sample" class="sub" type="button">見本に戻す</button>
+      </div>
+      <p id="err" class="err" hidden></p>
+
+      <h2>2. 公式の数と照らし合わせる</h2>
+      <table>
+        <thead><tr><th>種類</th><th class="num">simaiから</th><th class="num">公式</th><th>結果</th></tr></thead>
+        <tbody id="counts"></tbody>
+      </table>
+      <p class="note">公式の数は、Gamerchやotoge-dbの曲ページから手で写します。見本には OV3RCLOCK 14+ の数が入っています。</p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-radar">
+      <h2 id="h-radar">3. 譜面レーダー</h2>
+      <div class="radar-box">
+        <svg id="radar" viewBox="-205 -160 410 320" role="img" aria-label="物量・発狂・回転・ウミユリ・スライド・縦連のレーダーと、真ん中に推定定数"></svg>
+        <div class="scores" id="scores"></div>
+      </div>
+      <h2>目立つ場所</h2>
+      <ul class="spots" id="spots"></ul>
+      <p class="note">点数は「生の値 ÷ 基準値 × 100」で、0〜200に収めています。基準値は仮に決めたものです。Majdata Netの点数とは一致しません。</p>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="h-dens">
+    <h2 id="h-dens">4. 1秒ごとのノーツ数</h2>
+    <div class="chart-scroll"><svg id="dens" viewBox="0 0 900 190" role="img" aria-label="1秒ごとのノーツ数の棒グラフ"></svg></div>
+    <p class="note">オレンジの棒が、一番混んでいる1秒（発狂）を含む部分です。横軸は最初のノーツからの秒数です。</p>
+  </section>
+
+  <section class="panel">
+    <details open>
+      <summary>数え方（この試作の仮の式）</summary>
+      <dl>
+        <dt>物量</dt><dd>全部のノーツ数 ÷ 譜面の長さ（秒）。1秒あたり平均何個か。基準値 6.5個/秒。</dd>
+        <dt>発狂</dt><dd>どこでもいい1秒の幅をずらしていき、一番多く入る数。基準値 14個。</dd>
+        <dt>回転</dt><dd>1つずつ叩くノーツが、隣の位置へ同じ向きに4つ以上、0.25秒以内の間隔で続いたもの。その個数を1分あたりにする。基準値 40。</dd>
+        <dt>ウミユリ</dt><dd>星を叩いてからスライドが終わるまでに、ほかのノーツを2つ以上叩くスライド。その本数を1分あたりにする。基準値 30。</dd>
+        <dt>スライド</dt><dd>スライドの本数を1分あたりにする。基準値 40。</dd>
+        <dt>縦連</dt><dd>同じ位置を0.25秒以内にもう一度叩く回数を1分あたりにする。基準値 40。</dd>
+        <dt>推定定数</dt><dd>9.80 + 1.30 × ln(物量の生の値) + 0.60 × ln(発狂の生の値)。Majdata Net の難易度つき譜面 約1,450本から作った式で、12〜15ではおおよそ ±0.3 ずれます。集めた譜面がほとんど12以上なので、12より下はあてにならず「12未満」と出します。</dd>
+      </dl>
+      <p class="note" style="margin-top:12px">前提：スライドは星の1拍後に動き出すとしています。小節の番号は4拍＝1小節として数えています。拍子が変わる曲や、細かい書き方（<code>[160#8:1]</code> などの一部）は、正しく扱えないことがあります。</p>
+    </details>
+  </section>
+</div>
+
+<script>
+// ===== simai 解析（簡易版） =====
+const SEG = '(?:V[1-8][1-8]|pp[1-8]|qq[1-8]|[-^<>vpqszw][1-8])';
+const RE_SLIDE = new RegExp('^(?:([1-8])([bx]*))?((?:' + SEG + ')+)(\\[[^\\]]+\\])([bx]*)$');
+const RE_HOLD = /^([1-8])([bx]*)h([bx]*)(\[[^\]]+\])?$/;
+const RE_TAP = /^([1-8])([bx]*)$/;
+const RE_TOUCH = /^([A-E])([1-8]?)([bfhx]*)(\[[^\]]+\])?([bfx]*)$/;
+
+// [8:1] [160#8:1] [#1.5] [1##8:1] などから {delay, dur}（秒）
+function slideLen(br, bpm) {
+  const s = br.slice(1, -1);
+  let m;
+  if ((m = s.match(/^([\d.]+)##([\d.]+):([\d.]+)$/))) return { delay: +m[1], dur: 60 / bpm * 4 / +m[2] * +m[3] };
+  if ((m = s.match(/^([\d.]+)##([\d.]+)$/))) return { delay: +m[1], dur: +m[2] };
+  if ((m = s.match(/^([\d.]+)#([\d.]+):([\d.]+)$/))) return { delay: 60 / +m[1], dur: 60 / +m[1] * 4 / +m[2] * +m[3] };
+  if ((m = s.match(/^#([\d.]+)$/))) return { delay: 60 / bpm, dur: +m[1] };
+  if ((m = s.match(/^([\d.]+):([\d.]+)$/))) return { delay: 60 / bpm, dur: 60 / bpm * 4 / +m[1] * +m[2] };
+  return null;
+}
+
+function parseSimai(src) {
+  const text = src.replace(/\|\|.*$/gm, '');
+  let bpm = 120, div = 4, divSec = null, t = 0, beat = 0, tok = '';
+  const notes = [], errors = [];
+  let first = 0;
+  const fm = src.match(/&first=([\d.]+)/);
+  if (fm) first = +fm[1];
+  t = first;
+  const emit = (token, at, b) => {
+    for (let part of token.split(/[\/`]/)) {
+      part = part.replace(/[?!$@]/g, '');
+      if (!part) continue;
+      let m;
+      const base = { t: at, beat: b, measure: Math.floor(b / 4 + 1e-6) + 1 };
+      if (/^[A-E]/.test(part)) {
+        if ((m = part.match(RE_TOUCH))) {
+          const mods = m[3] + m[5];
+          notes.push({ ...base, kind: mods.includes('h') ? 'touchhold' : 'touch', zone: m[1] + m[2], brk: mods.includes('b') });
+        } else errors.push(part);
+        continue;
+      }
+      if (/^[1-8]{2,}$/.test(part)) {
+        for (const d of part) notes.push({ ...base, kind: 'tap', lane: +d, brk: false, ex: false });
+        continue;
+      }
+      if ((m = part.match(RE_TAP))) {
+        notes.push({ ...base, kind: 'tap', lane: +m[1], brk: m[2].includes('b'), ex: m[2].includes('x') });
+        continue;
+      }
+      if ((m = part.match(RE_HOLD))) {
+        const mods = m[2] + m[3];
+        notes.push({ ...base, kind: 'hold', lane: +m[1], brk: mods.includes('b'), ex: mods.includes('x') });
+        continue;
+      }
+      // スライド（* で同じ星から複数）
+      const pieces = part.split('*');
+      const head = pieces[0].match(RE_SLIDE);
+      if (!head || !head[1]) { errors.push(part); continue; }
+      const lane = +head[1], smods = head[2];
+      notes.push({ ...base, kind: 'star', lane, brk: smods.includes('b'), ex: smods.includes('x') });
+      for (let i = 0; i < pieces.length; i++) {
+        const mm = i === 0 ? head : pieces[i].match(RE_SLIDE);
+        if (!mm) { errors.push(pieces[i]); continue; }
+        const len = slideLen(mm[4], bpm);
+        if (!len) { errors.push(pieces[i]); continue; }
+        const path = mm[3];
+        notes.push({ ...base, kind: 'slide', lane, end: +path[path.length - 1], shape: path,
+          start: at + len.delay, dur: len.dur, brk: mm[5].includes('b') });
+      }
+    }
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '(') { const j = text.indexOf(')', i); bpm = parseFloat(text.slice(i + 1, j)); i = j; continue; }
+    if (c === '{') {
+      const j = text.indexOf('}', i); const inner = text.slice(i + 1, j);
+      if (inner.startsWith('#')) { divSec = parseFloat(inner.slice(1)); } else { div = parseFloat(inner); divSec = null; }
+      i = j; continue;
+    }
+    if (c === '&') { const j = text.indexOf('\n', i); i = j < 0 ? text.length : j; continue; }
+    if (c === ',') {
+      const tk = tok.trim();
+      if (tk && tk !== 'E') emit(tk, t, beat);
+      tok = '';
+      if (divSec != null) { t += divSec; beat += divSec * bpm / 60; }
+      else { t += 60 / bpm * 4 / div; beat += 4 / div; }
+      continue;
+    }
+    if (/\s/.test(c)) continue;
+    tok += c;
+  }
+  const tk = tok.trim();
+  if (tk && tk !== 'E') emit(tk, t, beat);
+  return { notes, errors, bpm };
+}
+
+function countNotes(notes) {
+  const c = { total: 0, tap: 0, hold: 0, slide: 0, touch: 0, brk: 0 };
+  for (const n of notes) {
+    c.total++;
+    if (n.brk) { c.brk++; continue; }
+    if (n.kind === 'tap' || n.kind === 'star') c.tap++;
+    else if (n.kind === 'hold' || n.kind === 'touchhold') c.hold++;
+    else if (n.kind === 'slide') c.slide++;
+    else if (n.kind === 'touch') c.touch++;
+  }
+  return c;
+}
+
+// ===== 分析（仮の式） =====
+const hitTime = n => n.kind === 'slide' ? n.start : n.t;
+const isTapLike = n => n.kind === 'tap' || n.kind === 'star' || n.kind === 'hold';
+
+const ANCHOR = { note: 6.5, peak: 14, swipe: 40, umiyuri: 30, slide: 40, jack: 40 };
+
+function analyze(notes) {
+  const times = notes.map(hitTime).sort((a, b) => a - b);
+  const endT = Math.max(...notes.map(n => n.kind === 'slide' ? n.start + n.dur : n.t));
+  const startT = times[0];
+  const dur = Math.max(1, endT - startT);
+  const perMin = 60 / dur;
+
+  // Peak：1秒の窓で一番多い数
+  let peak = 0, peakAt = startT, j = 0;
+  for (let i = 0; i < times.length; i++) {
+    while (times[i] - times[j] >= 1.0) j++;
+    if (i - j + 1 > peak) { peak = i - j + 1; peakAt = times[j]; }
+  }
+  const peakNote = notes.find(n => Math.abs(hitTime(n) - peakAt) < 1e-6);
+
+  // Jack：同じ位置を0.25秒以内にもう一度
+  const byLane = {};
+  for (const n of notes) if (isTapLike(n)) (byLane[n.lane] ||= []).push(n);
+  let jack = 0, jackMin = Infinity; const jackMeasures = {};
+  for (const arr of Object.values(byLane)) {
+    arr.sort((a, b) => a.t - b.t);
+    for (let i = 1; i < arr.length; i++) {
+      const g = arr[i].t - arr[i - 1].t;
+      if (g > 1e-4 && g <= 0.25) { jack++; jackMin = Math.min(jackMin, g); jackMeasures[arr[i].measure] = (jackMeasures[arr[i].measure] || 0) + 1; }
+    }
+  }
+
+  // Swipe：1つずつ叩くノーツが、隣の位置へ同じ向きに4つ以上続く
+  const groups = new Map();
+  for (const n of notes) if (isTapLike(n) || n.kind === 'touch') {
+    const k = n.t.toFixed(4); (groups.get(k) || groups.set(k, []).get(k)).push(n);
+  }
+  const singles = [...groups.values()].sort((a, b) => a[0].t - b[0].t);
+  let swipe = 0, run = 1, dir = 0; const swipeMeasures = {};
+  const flush = (endIdx) => {
+    if (run >= 4) { swipe += run; for (let k = endIdx - run + 1; k <= endIdx; k++) { const m = singles[k][0].measure; swipeMeasures[m] = (swipeMeasures[m] || 0) + 1; } }
+  };
+  for (let i = 1; i < singles.length; i++) {
+    const a = singles[i - 1], b = singles[i];
+    const ok = a.length === 1 && b.length === 1 && isTapLike(a[0]) && isTapLike(b[0]) && b[0].t - a[0].t <= 0.25;
+    let d = 0;
+    if (ok) { const diff = ((b[0].lane - a[0].lane) + 8) % 8; d = diff === 1 ? 1 : diff === 7 ? -1 : 0; }
+    if (d !== 0 && (run === 1 || d === dir)) { run++; dir = d; }
+    else { flush(i - 1); run = d !== 0 ? 2 : 1; dir = d; }
+  }
+  flush(singles.length - 1);
+
+  // ウミユリ風：スライドが動いている間に、ほかのノーツを2つ以上叩く
+  const others = notes.filter(n => n.kind !== 'slide').map(n => n.t).sort((a, b) => a - b);
+  let umiyuri = 0; const umiMeasures = {};
+  const slides = notes.filter(n => n.kind === 'slide');
+  for (const s of slides) {
+    const k = others.filter(x => x > s.t + 1e-4 && x < s.start + s.dur - 1e-4).length;
+    if (k >= 2) { umiyuri++; umiMeasures[s.measure] = (umiMeasures[s.measure] || 0) + 1; }
+  }
+
+  const raw = {
+    note: notes.length / dur,
+    peak,
+    swipe: swipe * perMin,
+    umiyuri: umiyuri * perMin,
+    slide: slides.length * perMin,
+    jack: jack * perMin,
+  };
+  const score = {};
+  for (const k in raw) score[k] = Math.max(0, Math.min(200, raw[k] / ANCHOR[k] * 100));
+  // 推定定数：Majdata Net の難易度つき譜面から最小二乗で作った仮の式（12未満はデータが少なく当たらない）
+  const est = 9.7987 + 1.2996 * Math.log(Math.max(raw.note, 0.1)) + 0.5983 * Math.log(Math.max(peak, 1));
+
+  // 1秒ごとの数
+  const bins = new Array(Math.ceil(endT - startT) + 1).fill(0);
+  for (const x of times) bins[Math.floor(x - startT)]++;
+
+  const top = obj => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([m, v]) => ({ m: +m, v }));
+  return {
+    dur, startT, raw, score, bins, est,
+    detail: {
+      peakMeasure: peakNote ? peakNote.measure : null, peakAt: peakAt - startT,
+      jackCount: jack, jackMin: isFinite(jackMin) ? jackMin : null, jackTop: top(jackMeasures),
+      swipeCount: swipe, swipeTop: top(swipeMeasures),
+      umiyuriCount: umiyuri, slideCount: slides.length, umiTop: top(umiMeasures),
+    },
+  };
+}
+
+if (typeof module !== 'undefined') module.exports = { parseSimai, countNotes, analyze };
+
+const SAMPLE = String.raw`(118)
+
+{24}18,,,24,,24,,,6,57,,,1-5[8:1]/8-4[8:1],,2,7,,,{4}A1/A8/D1f,
+
+7hx[2:1],6,5h[2:1],4,3h[2:1],2,1h[4:1],8h[4:1],2h[2:1],3,4h[2:1],5,6h[2:1],7,8h[4:1],1,
+
+{24}7x,,5,6,,5,6,,7h[8:1],,,6h[8:1],,,5,5h[8:1],,,4h[8:1],,,3h[8:1],,,
+
+2,,4,3,,4,3,,2h[8:1],,,3h[8:1],,,4,4,,,5p4[4:1],,6,4,,3,
+
+{4}5x,{24},,2,1,,,34,,,6h[12:1],,5,,,7,8,,,18,,,3h[12:1],,4,,,2,1,,,8h[12:1],,1,,,67,,,5,4,,,
+
+3x/4x,,4,3,,4,2,,4,1,,4,{8}8h[8:3],E3,E1,E7,{24}65,,5,6,,5,7,,5,8,,5,{8}1h[8:3],E7,E1,E3,
+
+{24}3,4,3,4,3,4,3,4,3,7,,,6,5,6,5,6,5,6-3[12:1],5,6,2,,,{2}A7/A8/D8f,{24}12,,12,,,5,4b/6b,,,1b/7b,,,
+
+
+1x/2x^7[8:1],,3,4,,4,2,,5,,,6,6-4[8:1],,4,4-8[8:1],,,3,,,1,,,
+
+3v6[8:1],,2,1,,1,3,,8,,,7,5,,5,4,,4,2,,2,{8}7-2[8:1],
+
+5b,4/7-4[8:1],3,7-2[8:1]/8,2,6/7-4[8:1],4,78,
+
+{24}2x,,2,4,,4,5x,,5,7,,7,2x,,2b/4b,,,4b/5b,,,6,5b/7b,,,
+
+8x/7x^2[8:1],,6,5,,5,7,,4,,,3,3-5[8:1],,5,5-1[8:1],,,6,,,8,,,
+
+6xv3[8:1],,7,8,,8,6,,1,,,2,4,,4,5,,5,7,,7,{8}2-7[8:1],
+
+4b,5/2-5[8:1],6,2-7[8:1]/1,7,3/2-5[8:1],5,21,
+
+{24}6x,,6,8,,8,1x,,1,3,,3,6,5,7,4,8,3,12,,3,4,,,
+
+
+3b/8b,,2,1,,{8}3/8v5[12:1],1,3v6[12:1]/8,2,3/8v5[12:1],1,{24}8,
+
+2x,,2,4,,4,5,,5,7,,7,{8}1^4[8:1]*-5[8:1],28,1x,,
+
+{24}2b/6b,,7,8,,{8}6/1v4[12:1],8,6v3[12:1]/1,7,6/1v4[12:1],8,{24}1,
+
+7,,7,5,,5,4,,4,2,,2,{8}8^5[8:1]*-4[8:1],71,8x,,
+
+{24}2b/6b,,3,4,,{8}2/5v8[12:1],4,2v7[12:1]/5,3,2/5v8[12:1],4,{24}5,
+
+3,,3,1,,1,8,,8,6,,6,1^4[8:1],,,26,,,5b,6,7,8,,,
+
+3x,4,3,5,4,5,3,4,2,5,4,6,1,,1,7,,7,5,,5,3,,3,
+
+8x,1,2,3,4,5,1x,2,3,4,5,6,{8}1h[24:1]/7h[24:1],4h[24:1]/5h[24:1],2h[24:1]/8h[24:1],1b/7b,
+
+
+B4/B5f/D4/D6/E4/E6,,3h[8:1],1b,5/6h[8:1],8b,3h[8:1]/4,1b,
+
+5/6h[8:1],8b,3h[8:1]/4,1b,5/6h[8:1],8b,{48}2,3,4,5,6,7,{8}8,
+
+2x-5[8:1],5-8[8:1],8p3[4:1]b,,3-6-1[4:1],6,1p4[4:1]b,,
+
+4x-7-2[4:1],7,2pp5[4:1]b,,5,5,{48}6,7,8,1,2,3,{8}4,
+
+3x/6x,,1/2h[8:1],4b,7h[8:1]/8,5b,1/2h[8:1],4b,
+
+7h[8:1]/8,5b,1/2h[8:1],4b,{12}2x/5x,3x/6x,4x/7x,{48}8,7,6,5,4,3,{8}2,
+
+7x-4[8:1],4-1[8:1],1q6[4:1]b,,6-3-8[4:1],3,8q5[4:1]b,,
+
+5x-2-7[4:1],2,7qq4[4:1]b,,4,4,{48}3,2,1,8,7,6,{8}5,
+
+2b-6[12:1],1b-5[12:1]/3,2b/8,1b,8b-4[12:1],1/7b-3[12:1],6/8b,7b,
+
+{24}1b,2,3,48,,37,{8}3b/7b,4b/5b^8[12:1],5b^2[12:1]/7b,3/5-1[12:1],5,5,
+
+2b,{24}3,4,3,7b,,,6,5,6,2bw6[8:1],,2,1,,1,{4}2b,
+
+{24}4x,,4,3,,3,2,,2,1,,1,2x/8x,3,4,15,6,7,48,1,2,37,4,5,{1}2bp7[2:1]/6bp3[2:1],
+
+
+{2}1xq5[2:1],6q2[2:1],4V28[2:1],7V53[2:1],1s5[2:1],6z2[2:1],1q4[2:1],{4}7-3[8:1],7,
+
+{8}1x-5[8:1],2,8-4[8:1],7,2-6[8:1],3,1-5[8:1],8,3-7[8:1],2,6-2[8:1],5,{2}1pp4[4:1],
+
+{24}7,6,5,7,6,5,7,6,5,7,6,5,2,3,4,2,3,4,2,3,4,2,3,4,
+
+15,,,27,,27,,,6,5,,,2-7[12:1]/4-7[12:1],,24,,,1,{4}2b/4b,
+
+
+{1}1x>5[2:1]/5x<1[2:1]b,
+
+{24}4x/5x,,3,3x/4x,,6,5x/6x,,3,2x/4x,,6,5x/7x,,2,1x/4x,,7,5x/8x,,,B1f/B8/D2/D8/E2/E8,,,
+
+4xv7[8:1]/5x,,3,4,,2,4,,1,,,8,6,,7,6,,,5/6h[8:1],4,3,2^7[8:1],,5,
+
+5b,,,2^5[8:1]/3,,,6,,1,2^7[8:1],,,6,,3,2^5[8:1],,,6,,1,2,,,
+
+7,,7,5-1[12:1],,4,5,,6,5,,,28,,1b/3b,,,4b/5b,,,6,5b/7b,,,
+
+1xv6[8:1]/8x,,2,1,,3,1,,4,,,5,7-2[8:1],,6,7,,,17,,,3,,,
+
+5xv2[8:1]/4x,,6,5,,7,5,,8,,,1,3x,,2,3,,,4/3h[8:1],5,6,7^2[8:1],,5,
+
+5b,,,7^4[8:1]/6,,,3,,8,7^2[8:1],,,3,,6,7^4[8:1],,,3,,8,7,,,
+
+2,,2,4-7[12:1],,5,4,,3,4,,,3,2,1,8,,15,,,2,1,,8v5[12:1],
+
+
+1x,,2,1,,3v6[12:1]/8,,,2,1,,3/8v5[12:1],,,1,2,,38,,,1,6,,1bv4[12:1]/7b,
+
+,,7,8,,6v3[12:1]/1,,,8,7,,6/1v4[12:1],,,7,8,,15,6b,7b,8b,1b,,,
+
+3,4,3,6,5,6,2,3,2,7,6,7,1b,,1,3b,,3,6b,,6,8b,,8,
+
+{48}2x,3,4,5,{24}6,8,8,8,{48}5,4,3,2,{24}1,7,7,7,
+
+{48}2x,3,4,5,6,7,2x,3,4,5,6,7,2x,3,4,5,6,7,2x,3,4,5,6,7,
+
+{24}1b/8b,,2,2^7[8:1],,7b,,,2,2,,{96}6b,5b,4b,3b,{2},{1},,,,E`;
+const OFFICIAL_SAMPLE = { total: 927, tap: 685, hold: 40, slide: 91, touch: 24, brk: 87 };
+const AXES = [
+  // 上から時計回り：物量・発狂・回転・ウミユリ・スライド・縦連
+  ['note', '物量', v => v.toFixed(2) + '個/秒'],
+  ['peak', '発狂', v => v + '個/1秒'],
+  ['swipe', '回転', v => v.toFixed(1) + '/分'],
+  ['umiyuri', 'ウミユリ', v => v.toFixed(1) + '/分'],
+  ['slide', 'スライド', v => v.toFixed(1) + '本/分'],
+  ['jack', '縦連', v => v.toFixed(1) + '/分'],
+];
+const estText = e => e < 12 ? '12未満' : Math.min(e, 15).toFixed(1);
+const KINDS = [['total', '総数'], ['tap', 'TAP'], ['hold', 'HOLD'], ['slide', 'SLIDE'], ['touch', 'TOUCH'], ['brk', 'BREAK']];
+const $ = id => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
+
+let official = { ...OFFICIAL_SAMPLE };
+let lastCount = null;
+
+function renderCounts(c) {
+  lastCount = c;
+  const tb = $('counts'); tb.textContent = '';
+  for (const [k, name] of KINDS) {
+    const tr = document.createElement('tr');
+    const has = official[k] !== '' && official[k] != null && !isNaN(official[k]);
+    const ok = has && +official[k] === c[k];
+    tr.innerHTML = `<td>${name}</td><td class="num">${c[k]}</td><td class="num"><input id="off-${k}" inputmode="numeric" aria-label="公式の${name}" value="${has ? official[k] : ''}"></td>` +
+      `<td>${has ? (ok ? '<span class="pill ok">一致</span>' : `<span class="pill ng">差 ${c[k] - official[k] > 0 ? '+' : ''}${c[k] - official[k]}</span>`) : '<span class="pill na">未入力</span>'}</td>`;
+    tb.appendChild(tr);
+  }
+  tb.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => {
+    official[inp.id.slice(4)] = inp.value.trim() === '' ? '' : +inp.value; renderCounts(lastCount);
+  }));
+}
+
+function renderRadar(score, est) {
+  const svg = $('radar'); svg.textContent = '';
+  const R = 115, n = AXES.length;
+  const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [r * Math.cos(a), r * Math.sin(a)]; };
+  for (const lv of [50, 100, 150, 200]) {
+    const pts = AXES.map((_, i) => pt(i, R * lv / 200).join(',')).join(' ');
+    svg.appendChild(el('polygon', { points: pts, fill: 'none', stroke: 'var(--line)', 'stroke-width': lv === 100 ? 1.6 : 1 }));
+  }
+  AXES.forEach((_, i) => { const [x, y] = pt(i, R); svg.appendChild(el('line', { x1: 0, y1: 0, x2: x, y2: y, stroke: 'var(--line)' })); });
+  svg.appendChild(el('text', { x: 4, y: -R / 2 - 3, 'font-size': 9, style: 'fill:var(--muted)' }, '100'));
+  const pts = AXES.map(([k], i) => pt(i, R * score[k] / 200).join(',')).join(' ');
+  svg.appendChild(el('polygon', { id: 'poly', points: pts, fill: 'var(--accent-soft)', stroke: 'var(--accent)', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+  AXES.forEach(([k], i) => { const [x, y] = pt(i, R * score[k] / 200); svg.appendChild(el('circle', { cx: x, cy: y, r: 3.2, fill: 'var(--accent)' })); });
+  AXES.forEach(([k, name], i) => {
+    const [x, y] = pt(i, R + 22);
+    const anchor = Math.abs(x) < 5 ? 'middle' : x > 0 ? 'start' : 'end';
+    const t = el('text', { x, y: y + 4, 'text-anchor': anchor, 'font-size': 13, 'font-weight': 700 }, name);
+    const s = el('tspan', { dx: 5, 'font-weight': 400, style: 'fill:var(--muted)' }, Math.round(score[k]));
+    t.appendChild(s); svg.appendChild(t);
+  });
+  // 真ん中に推定定数
+  svg.appendChild(el('circle', { cx: 0, cy: 0, r: 30, fill: 'var(--surface)', stroke: 'var(--accent)', 'stroke-width': 1.5, opacity: .94 }));
+  svg.appendChild(el('text', { x: 0, y: -9, 'text-anchor': 'middle', 'font-size': 8.5, style: 'fill:var(--muted)' }, '推定定数'));
+  svg.appendChild(el('text', { x: 0, y: 12, 'text-anchor': 'middle', 'font-size': est < 12 ? 12 : 19, 'font-weight': 700, style: 'font-family:var(--font-data)' }, estText(est)));
+}
+
+function renderScores(a) {
+  const box = $('scores'); box.textContent = '';
+  for (const [k, name, fmt] of AXES) {
+    const d = document.createElement('div'); d.className = 'score';
+    d.innerHTML = `<span>${name}</span><span class="bar"><i style="width:${a.score[k] / 2}%"></i></span><b>${Math.round(a.score[k])}</b><small>生の値 ${fmt(a.raw[k])}</small>`;
+    box.appendChild(d);
+  }
+}
+
+function renderSpots(a) {
+  const d = a.detail, ul = $('spots'); ul.textContent = '';
+  const ms = arr => arr.length ? arr.map(o => `${o.m}小節`).join('、') : 'なし';
+  const rows = [
+    ['一番混む1秒', d.peakMeasure ? `${d.peakMeasure}小節あたり（${d.peakAt.toFixed(1)}秒〜）` : 'なし'],
+    ['縦連の最短', d.jackMin ? `${d.jackMin.toFixed(3)}秒（全${d.jackCount}回）` : 'なし'],
+    ['縦連が多い', ms(d.jackTop)],
+    ['回転が多い', ms(d.swipeTop)],
+    ['ウミユリが多い', `${ms(d.umiTop)}（${d.umiyuriCount}/${d.slideCount}本）`],
+    ['譜面の長さ', `${a.dur.toFixed(1)}秒`],
+  ];
+  for (const [k, v] of rows) { const li = document.createElement('li'); li.innerHTML = `<span>${k}</span><span>${v}</span>`; ul.appendChild(li); }
+}
+
+function renderDensity(a) {
+  const svg = $('dens'); svg.textContent = '';
+  const W = 900, H = 190, L = 34, B = 26, T = 10, Rr = 8;
+  const bins = a.bins, max = Math.max(...bins), yMax = Math.ceil(max / 5) * 5 || 5;
+  const bw = (W - L - Rr) / bins.length;
+  const y = v => H - B - (H - B - T) * v / yMax;
+  for (let v = 0; v <= yMax; v += 5) {
+    svg.appendChild(el('line', { x1: L, x2: W - Rr, y1: y(v), y2: y(v), stroke: 'var(--line)', 'stroke-width': v === 0 ? 1.2 : .6 }));
+    svg.appendChild(el('text', { x: L - 6, y: y(v) + 4, 'text-anchor': 'end', 'font-size': 10, style: 'fill:var(--muted)' }, v));
+  }
+  const pk = Math.floor(a.detail.peakAt);
+  bins.forEach((v, i) => {
+    const hot = i === pk || i === pk + 1;
+    const r = el('rect', { x: L + i * bw + .5, y: y(v), width: Math.max(1, bw - 1), height: H - B - y(v), fill: hot ? 'var(--hot)' : 'var(--accent)', opacity: hot ? 1 : .8 });
+    r.appendChild(el('title', {}, `${i}〜${i + 1}秒：${v}個`)); svg.appendChild(r);
+  });
+  for (let s = 0; s <= bins.length; s += 20) {
+    svg.appendChild(el('text', { x: L + s * bw, y: H - 8, 'text-anchor': 'middle', 'font-size': 10, style: 'fill:var(--muted)' }, s + '秒'));
+  }
+}
+
+function run() {
+  const err = $('err'); err.hidden = true;
+  const r = parseSimai($('src').value);
+  if (!r.notes.length) { err.textContent = 'ノーツが見つかりませんでした。simaiの文字（例：(118){24}18,,,24,…）を貼ってください。'; err.hidden = false; return; }
+  if (r.errors.length) { err.textContent = `読めなかった書き方が ${r.errors.length} か所あります（数に入っていません）：` + r.errors.slice(0, 8).join('  '); err.hidden = false; }
+  renderCounts(countNotes(r.notes));
+  const a = analyze(r.notes);
+  renderRadar(a.score, a.est); renderScores(a); renderSpots(a); renderDensity(a);
+}
+
+let lastSrc = SAMPLE.trim();
+$('run').addEventListener('click', () => {
+  const now = $('src').value.trim();
+  if (now !== lastSrc) { official = {}; for (const [k] of KINDS) official[k] = ''; lastSrc = now; }
+  run();
+});
+$('sample').addEventListener('click', () => { $('src').value = SAMPLE; lastSrc = SAMPLE.trim(); $('song').value = 'OV3RCLOCK'; $('diff').value = 'MASTER 14+'; official = { ...OFFICIAL_SAMPLE }; run(); });
+// ===== サイトから読む（Majdata Net） =====
+// 一覧は majdata.net の API から直接読める。譜面ファイルは cdn.majdata.net にあり、
+// ほかのページからは読めないので、radar-server.js（docker compose up radar）経由で読む。
+const LV_NAMES = ['EASY', 'BASIC', 'ADVANCED', 'EXPERT', 'MASTER', 'Re:MASTER', 'UTAGE'];
+const MJ_API = 'https://majdata.net/api3/api/maichart';
+const viaProxy = /^https?:$/.test(location.protocol) && location.pathname.split('/').length <= 2;
+const mjUrl = path => viaProxy ? location.origin + '/majdata/api3/api/maichart' + path : MJ_API + path;
+let hits = [], page = 0, query = '';
+
+function siteMsg(text, bad) { const m = $('site-msg'); m.textContent = text; m.className = bad ? 'err' : 'note'; }
+
+// maidata.txt を &名前=値 に分ける（値は次の & 行まで続く）
+function parseMaidata(txt) {
+  const out = {};
+  for (const block of ('\n' + txt.replace(/\r/g, '')).split(/\n&/).slice(1)) {
+    const i = block.indexOf('=');
+    if (i > 0) out[block.slice(0, i).trim()] = block.slice(i + 1).trim();
+  }
+  return out;
+}
+
+async function findCharts(more) {
+  const site = $('site').value.trim();
+  if (!/majdata\.net/i.test(site)) { siteMsg('このサイトにはまだ対応していません。いまは https://majdata.net だけです。', true); return; }
+  // 譜面ページのURLが入っていたら、その1曲だけ出す
+  const id = site.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  if (!more) { page = 0; hits = []; query = $('q').value.trim(); }
+  siteMsg('探しています…');
+  try {
+    let list;
+    if (id && !more) {
+      const r = await fetch(MJ_API + '/' + id[0] + '/summary');
+      list = r.ok ? [await r.json()] : [];
+    } else {
+      const r = await fetch(`${MJ_API}/list?search=${encodeURIComponent(query)}&page=${page}`);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      list = await r.json();
+    }
+    hits = hits.concat(list);
+    page++;
+    $('more').hidden = !!id || list.length < 30;
+    renderHits();
+    siteMsg(hits.length ? `${hits.length}件。譜面と難易度を選んでください。` : '見つかりませんでした。英語・日本語どちらの曲名でも試してください。', !hits.length);
+  } catch (e) { siteMsg('一覧を読めませんでした：' + e.message, true); }
+}
+
+function renderHits() {
+  const sel = $('hits'), keep = sel.value; sel.textContent = '';
+  hits.forEach((h, i) => {
+    const lv = h.levels.map((v, k) => v ? `${LV_NAMES[k][0] === 'R' ? 'Re' : LV_NAMES[k].slice(0, 3)} ${v}` : '').filter(Boolean).join(' / ');
+    const o = new Option(`${h.title}　— ${h.artist}（譜面: ${h.designer}）　${lv}`, i);
+    sel.add(o);
+  });
+  if (keep) sel.value = keep;
+  if (sel.selectedIndex < 0 && hits.length) sel.selectedIndex = 0;
+  pickHit();
+}
+
+function pickHit() {
+  const h = hits[$('hits').value], lv = $('lv'); lv.textContent = '';
+  if (!h) { lv.disabled = $('load').disabled = true; return; }
+  h.levels.forEach((v, k) => { if (v) lv.add(new Option(`${LV_NAMES[k]} ${v}`, k + 1)); });
+  const master = [...lv.options].findIndex(o => o.value === '5');
+  lv.selectedIndex = master >= 0 ? master : lv.options.length - 1;
+  lv.disabled = $('load').disabled = !lv.options.length;
+}
+
+function useMaidata(txt, h, n) {
+  const d = parseMaidata(txt);
+  const nums = Object.keys(d).filter(k => /^inote_\d$/.test(k) && d[k]).map(k => +k.slice(6));
+  if (!n || !d['inote_' + n]) n = nums.includes(5) ? 5 : nums.sort().pop();
+  if (!n) { siteMsg('この maidata.txt には譜面（&inote_）がありませんでした。', true); return; }
+  const first = d['first_' + n] || d.first || '0';
+  $('src').value = `&first=${first}\n` + d['inote_' + n];
+  $('song').value = d.title || (h && h.title) || '';
+  $('diff').value = `${LV_NAMES[n - 1] || 'inote_' + n} ${d['lv_' + n] || ''}`.trim();
+  official = {}; for (const [k] of KINDS) official[k] = '';
+  lastSrc = $('src').value.trim();
+  run();
+  siteMsg(`「${$('song').value}」${$('diff').value} を入れて解析しました。公式の数は手で入れてください。`);
+}
+
+async function loadChart() {
+  const h = hits[$('hits').value], n = +$('lv').value;
+  if (!h) return;
+  siteMsg('譜面を読んでいます…');
+  try {
+    const r = await fetch(mjUrl('/' + h.id + '/chart'));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    useMaidata(await r.text(), h, n);
+    $('file-box').hidden = true;
+  } catch (e) {
+    const how = viaProxy ? '' : 'このページを直接開いていると、Majdata の決まりで譜面ファイルを読めません。docker compose up radar で http://localhost:8787/ から開くか、';
+    $('site-msg').className = 'err';
+    $('site-msg').innerHTML = `譜面を読めませんでした（${e.message}）。${how}<a href="${MJ_API}/${h.id}/chart" target="_blank" rel="noopener">maidata.txt をダウンロード</a>して下で開いてください。`;
+    $('file-box').hidden = false;
+  }
+}
+
+$('find').addEventListener('click', () => findCharts(false));
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') findCharts(false); });
+$('more').addEventListener('click', () => findCharts(true));
+$('hits').addEventListener('change', pickHit);
+$('hits').addEventListener('dblclick', loadChart);
+$('load').addEventListener('click', loadChart);
+$('file').addEventListener('change', async () => {
+  const f = $('file').files[0]; if (!f) return;
+  useMaidata(await f.text(), hits[$('hits').value], +$('lv').value);
+});
+
+$('src').value = SAMPLE;
+run();
+</script>
+
+</body></html>
